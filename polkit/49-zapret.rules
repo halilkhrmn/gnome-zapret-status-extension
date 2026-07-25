@@ -1,0 +1,24 @@
+// Allow users in the "wheel" group to start/stop/restart/enable/disable
+// the zapret.service systemd unit without entering a password.
+//
+// Install to: /etc/polkit-1/rules.d/49-zapret.rules
+
+polkit.addRule(function(action, subject) {
+    if (action.id === 'org.freedesktop.systemd1.manage-units' &&
+        subject.isInGroup('wheel')) {
+        var units = action.lookup('unit');
+        if (units === 'zapret.service') {
+            return polkit.Result.YES;
+        }
+        // Some polkit versions pass an array of unit names.
+        if (Array.isArray(units)) {
+            for (var i = 0; i < units.length; i++) {
+                if (units[i] !== 'zapret.service') {
+                    return polkit.Result.NOT_HANDLED;
+                }
+            }
+            return polkit.Result.YES;
+        }
+    }
+    return polkit.Result.NOT_HANDLED;
+});

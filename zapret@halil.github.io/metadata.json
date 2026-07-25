@@ -1,0 +1,11 @@
+{
+  "uuid": "zapret@halil.github.io",
+  "name": "Zapret Service Control",
+  "description": "Monitor and control the zapret systemd service from the top panel. Start, stop, restart, and check status.",
+  "shell-version": [
+    "50"
+  ],
+  "version": 1,
+  "url": "https://github.com/halil/gnome-zapret",
+  "session-modes": ["user", "unlock-dialog"]
+}
