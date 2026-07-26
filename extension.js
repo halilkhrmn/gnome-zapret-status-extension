@@ -11,6 +11,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const SERVICE = 'zapret.service';
+const SCRIPT = '/opt/zapret/init.d/sysv/zapret';
 
 const STATE_RUNNING = 0;
 const STATE_STOPPED = 1;
@@ -23,6 +24,10 @@ const DOT_MISSING = '#ff5c5c';
 const MSG_NOT_INSTALLED = 'Zapret is not installed';
 const MSG_RUNNING = 'Zapret: running';
 const MSG_STOPPED = 'Zapret: stopped';
+
+function decode(bytes) {
+    return new TextDecoder().decode(bytes);
+}
 
 const ZapretIndicator = GObject.registerClass(
 class ZapretIndicator extends PanelMenu.Button {
@@ -67,15 +72,15 @@ class ZapretIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
         this._startItem = new PopupMenu.PopupMenuItem('Start');
-        this._startItem.connect('activate', () => this._runSystemctl('start'));
+        this._startItem.connect('activate', () => this._runScript('start'));
         this.menu.addMenuItem(this._startItem);
 
         this._stopItem = new PopupMenu.PopupMenuItem('Stop');
-        this._stopItem.connect('activate', () => this._runSystemctl('stop'));
+        this._stopItem.connect('activate', () => this._runScript('stop'));
         this.menu.addMenuItem(this._stopItem);
 
         this._restartItem = new PopupMenu.PopupMenuItem('Restart');
-        this._restartItem.connect('activate', () => this._runSystemctl('restart'));
+        this._restartItem.connect('activate', () => this._runScript('restart'));
         this.menu.addMenuItem(this._restartItem);
 
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
@@ -86,7 +91,7 @@ class ZapretIndicator extends PanelMenu.Button {
 
         this._enabledItem = new PopupMenu.PopupMenuItem('');
         this._enabledItem.connect('activate', () => {
-            this._runSystemctl(this._enabled ? 'disable' : 'enable');
+            this._runEnable(this._enabled ? 'disable' : 'enable');
         });
         this.menu.addMenuItem(this._enabledItem);
 
@@ -114,11 +119,13 @@ class ZapretIndicator extends PanelMenu.Button {
     }
 
     refresh() {
-        this._exists = this._serviceExists();
+        this._exists = this._scriptExists();
 
         if (this._exists) {
-            this._read(['systemctl', 'is-active', SERVICE], (line) => {
-                this._active = line.trim() === 'active';
+            // Detect running daemons by checking for nfqws/tpws processes.
+            // pidof returns the PIDs (exit 0) if any match, empty (exit 1) if none.
+            this._read(['pidof', 'nfqws', 'tpws'], (out) => {
+                this._active = out.trim().length > 0;
                 this._updateUi();
             });
             this._read(['systemctl', 'is-enabled', SERVICE], (line) => {
@@ -133,13 +140,22 @@ class ZapretIndicator extends PanelMenu.Button {
         this._updateUi();
     }
 
-    _serviceExists() {
+    _scriptExists() {
         try {
-            const [, out] = GLib.spawn_sync(null,
-                ['systemctl', 'list-unit-files', '--no-legend', SERVICE],
-                null, GLib.SpawnFlags.SEARCH_PATH, null);
-            const txt = new TextDecoder().decode(out).trim();
-            return txt.length > 0 && txt.split(/\s+/)[0] === SERVICE;
+            const file = Gio.File.new_for_path(SCRIPT);
+            const info = file.query_info(
+                'unix::is-symlink,unix::mode',
+                Gio.FileQueryInfoFlags.NONE, null);
+            // Follow symlinks to the final target.
+            let target = file;
+            if (info.get_attribute_boolean('unix::is-symlink'))
+                target = file.resolve_path(null);
+            const tinfo = target.query_info(
+                'unix::mode',
+                Gio.FileQueryInfoFlags.NONE, null);
+            const mode = tinfo.get_attribute_uint32('unix::mode');
+            // Executable bit for any of user/group/other.
+            return !!(mode & 0o111);
         } catch (e) {
             return false;
         }
@@ -149,7 +165,7 @@ class ZapretIndicator extends PanelMenu.Button {
         try {
             const [, out] = GLib.spawn_sync(null, argv, null,
                 GLib.SpawnFlags.SEARCH_PATH, null);
-            callback(new TextDecoder().decode(out));
+            callback(decode(out));
         } catch (e) {
             callback('');
         }
@@ -195,11 +211,26 @@ class ZapretIndicator extends PanelMenu.Button {
         }
     }
 
-    _runSystemctl(action) {
+    _runScript(action) {
+        // Run the sysv init script via pkexec, which triggers the standard
+        // polkit authentication prompt. /opt/zapret/init.d/sysv/zapret is
+        // owned by root and not user-writable (satisfies review guidelines).
         try {
-            GLib.spawn_command_line_async(`systemctl ${action} ${SERVICE}`);
+            GLib.spawn_command_line_async(`pkexec ${SCRIPT} ${action}`);
         } catch (e) {
-            Main.notifyError('Zapret', `Failed to run systemctl ${action}`);
+            Main.notifyError('Zapret', `Failed to run ${action}`);
+            return;
+        }
+        this._scheduleRefresh(800);
+        this._scheduleRefresh(2500);
+        this._scheduleRefresh(5000);
+    }
+
+    _runEnable(action) {
+        try {
+            GLib.spawn_command_line_async(`pkexec systemctl ${action} ${SERVICE}`);
+        } catch (e) {
+            Main.notifyError('Zapret', `Failed to ${action} autostart`);
             return;
         }
         this._scheduleRefresh(800);
@@ -217,10 +248,16 @@ class ZapretIndicator extends PanelMenu.Button {
 
     _showDetailedStatus() {
         try {
+            // Show running daemons + systemd unit view. All read-only,
+            // no authorization required (user can inspect processes).
             const [, out] = GLib.spawn_sync(null,
-                ['systemctl', 'status', SERVICE, '--no-pager', '--full'],
+                ['sh', '-c',
+                    'echo "== running daemons =="; pgrep -a nfqws; pgrep -a tpws; ' +
+                    'echo; echo "== systemctl is-active =="; systemctl is-active zapret.service; ' +
+                    'echo; echo "== systemctl is-enabled =="; systemctl is-enabled zapret.service; ' +
+                    'echo; echo "== systemctl status =="; systemctl status zapret.service --no-pager --full'],
                 null, GLib.SpawnFlags.SEARCH_PATH, null);
-            const text = new TextDecoder().decode(out) || '(no output)';
+            const text = decode(out) || '(no output)';
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, text);
             Main.notify('Zapret', 'Detailed status copied to clipboard');
         } catch (e) {

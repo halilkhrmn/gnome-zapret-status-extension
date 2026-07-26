@@ -1,7 +1,7 @@
 {
   "uuid": "gnome-zapret@halilkhrmn.github.io",
   "name": "Zapret Service Control",
-  "description": "Monitor and control the zapret systemd service from the top panel.\nThis extension is a control GUI for zapret (https://github.com/bol-van/zapret) and requires it to be installed and registered as zapret.service.\nInstall guide: https://keift.gitbook.io/guides/linux/install-zapret\n\nThe panel shows a Z icon with a colored status dot:\n* green: zapret.service is running\n* orange: zapret.service is stopped\n* red: zapret.service is not installed\n\nMenu actions allow starting, stopping, restarting, enabling/disabling autostart, and copying the detailed systemctl status to the clipboard.\n\nStarting, stopping and restarting the service requires polkit authorization, which will be requested automatically when an action is triggered.",
+  "description": "Monitor and control the zapret service from the top panel.\nThis extension is a control GUI for zapret (https://github.com/bol-van/zapret) and requires it to be installed (install guide: https://keift.gitbook.io/guides/linux/install-zapret).\n\nThe panel shows a Z icon with a colored status dot:\n* green: zapret is running (nfqws/tpws daemon alive)\n* orange: zapret is stopped\n* red: zapret is not installed\n\nMenu actions allow starting, stopping, restarting, enabling/disabling boot autostart, and copying a detailed status report to the clipboard.\n\nService control is performed by invoking the zapret init script (/opt/zapret/init.d/sysv/zapret) via pkexec, which triggers the standard polkit authentication prompt. Detection of running state is based on the actual nfqws/tpws daemon processes rather than the systemd unit state.",
   "shell-version": [
     "50"
   ],
