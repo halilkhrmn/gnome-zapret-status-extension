@@ -1,11 +1,9 @@
 {
-  "uuid": "zapret@halil.github.io",
+  "uuid": "gnome-zapret@halilkhrmn.github.io",
   "name": "Zapret Service Control",
-  "description": "Monitor and control the zapret systemd service from the top panel. Start, stop, restart, and check status.",
+  "description": "Monitor and control the zapret systemd service from the top panel.\nThis extension is a control GUI for zapret (https://github.com/bol-van/zapret) and requires it to be installed and registered as zapret.service.\nInstall guide: https://keift.gitbook.io/guides/linux/install-zapret\n\nThe panel shows a Z icon with a colored status dot:\n* green: zapret.service is running\n* orange: zapret.service is stopped\n* red: zapret.service is not installed\n\nMenu actions allow starting, stopping, restarting, enabling/disabling autostart, and copying the detailed systemctl status to the clipboard.\n\nStarting, stopping and restarting the service requires polkit authorization, which will be requested automatically when an action is triggered.",
   "shell-version": [
     "50"
   ],
-  "version": 1,
-  "url": "https://github.com/halil/gnome-zapret",
-  "session-modes": ["user", "unlock-dialog"]
+  "url": "https://github.com/halilkhrmn/gnome-zapret-status-extension"
 }

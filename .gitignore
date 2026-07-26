@@ -1,0 +1,21 @@
+# Compiled GSettings schemas
+*.gschema.valid
+schemas/*.compiled
+schemas/gschemas.compiled
+
+# GNOME Shell extension packaging
+*.shell-extension.zip
+*.zip
+
+# Build artifacts
+build/
+dist/
+*.mo
+
+# Editor / OS
+*.swp
+*~
+.DS_Store
+
+# Local install test copies
+/.local*/

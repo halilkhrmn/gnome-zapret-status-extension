@@ -1,37 +1,70 @@
-# GNOME Zapret Extension
+# GNOME Zapret Status Extension
 
-GNOME Shell (50 / Fedora 46) panel eklentisi. `zapret.service` systemd servisinin
-durumunu üst barda ikon + ON/OFF etiketi olarak gösterir; başlat / durdur /
-yeniden başlat / ayrıntılı durum / autostart toggle menüsü sunar.
+A GNOME Shell panel extension that shows the status of the `zapret.service`
+systemd unit in the top bar via a **Z** icon with a colored status dot, and
+exposes a menu to start / stop / restart / show detailed status / toggle
+autostart.
 
-## Yetkilendirme
+> **This extension is a control GUI for [zapret](https://github.com/bol-van/zapret)
+> and will not do anything useful without it.** zapret must be installed and
+> its systemd service registered as `zapret.service`.
+>
+> Install guide: https://keift.gitbook.io/guides/linux/install-zapret
+> Upstream project: https://github.com/bol-van/zapret
 
-Servisi başlat/durdur `systemctl` üzerinden yapılır ve polkit yetkisi gerekir.
-`polkit/49-zapret.rules` kuralı `wheel` grubundaki kullanıcıların **yalnızca**
-`zapret.service` birimini parolasız yönetmesine izin verir. Başka servislere
-erişim yoktur.
+## Authorization
 
-## Kurulum
+Starting, stopping, restarting and enabling/disabling the service is done
+through `systemctl`. These actions require polkit authorization, which is
+requested automatically through the standard GNOME authentication prompt when
+an action is triggered. No extra setup is needed.
+
+Status monitoring (icon, dot, menu status line, detailed status) only reads
+state and does not require any authorization.
+
+## Installation
+
+### Extension
+
+Install into the user directory:
 
 ```sh
-# 1) Polkit kuralını kur (bir kez)
-sudo install -m 0644 polkit/49-zapret.rules /etc/polkit-1/rules.d/49-zapret.rules
-
-# 2) Eklentiyi kur
-mkdir -p ~/.local/share/gnome-shell/extensions
-cp -r zapret@halil.github.io ~/.local/share/gnome-shell/extensions/
-
-# 3) GNOME Shell'i yeniden başlat (Wayland altında çıkış/giriş gerekir)
-# X11: Alt+F2 -> r
+UUID=gnome-zapret@halilkhrmn.github.io
+mkdir -p ~/.local/share/gnome-shell/extensions/$UUID
+cp metadata.json extension.js icons ~/.local/share/gnome-shell/extensions/$UUID/
 ```
 
-Eklentiyi `gnome-extensions` ile veya **Ayarlar → Uzantılar** menüsünden
-etkinleştirin.
+Under Wayland, GNOME Shell only scans for new extensions at startup, so log out
+and back in. On X11 you can restart the shell with `Alt+F2 → r`. Then enable:
 
-## CLI kontrolü
+```sh
+gnome-extensions enable gnome-zapret@halilkhrmn.github.io
+```
 
-Eklenti `systemctl` kullandığı için komut satırından da tüm kontrolleri
-yapabilirsiniz:
+or toggle it from **Settings → Extensions**.
+
+### Test from source
+
+You can also test from the source tree by symlinking:
+
+```sh
+ln -s "$PWD" ~/.local/share/gnome-shell/extensions/gnome-zapret@halilkhrmn.github.io
+```
+
+## Packaging for extensions.gnome.org
+
+```sh
+./build.sh
+```
+
+Produces `build/<uuid>.shell-extension.zip` containing only the extension
+files (metadata.json, extension.js, icons/). README and LICENSE are
+intentionally excluded per the review guidelines.
+
+## CLI control
+
+Since the extension drives `systemctl`, you can do everything from the command
+line as well:
 
 ```sh
 systemctl status zapret.service
@@ -42,14 +75,28 @@ systemctl stop zapret.service
 systemctl restart zapret.service
 ```
 
-Ayrıntılı engelleme kontrolü için:
+For a detailed blocking check:
 
 ```sh
 /opt/zapret/blockcheck.sh
 ```
 
-## Notlar
+## Panel indicator
 
-- Durum her 10 saniyede ve her aksiyondan sonra yenilenir.
-- "Detailed status" tüm `systemctl status` çıktısını panoya kopyalar.
-- Wayland'de `Alt+F2 r` çalışmaz; çıkış/giriş yapın.
+The panel shows a **Z** glyph with a small colored dot in the bottom-right
+corner:
+
+| Dot color | Meaning                          |
+|-----------|----------------------------------|
+| green     | `zapret.service` is running      |
+| orange    | `zapret.service` is stopped      |
+| red       | `zapret.service` is not installed |
+
+When the unit is missing, all menu actions are disabled and the Z icon is
+dimmed. Left/right-clicking shows a notification: *Zapret is not installed*.
+
+## Notes
+
+- Status is refreshed every 10 seconds and after each action.
+- "Detailed status" copies the full `systemctl status` output to the clipboard.
+- `Alt+F2 r` does not work under Wayland; log out and back in.
